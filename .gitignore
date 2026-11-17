@@ -1,0 +1,7 @@
+*.o
+*.d
+/UploadServer
+/ConsoleApp
+/images/
+/core
+__pycache__/

@@ -1,19 +1,22 @@
 #pragma once
-#include <iosfwd>
+#include <cstddef>
+#include <string>
 
-class Socket
-{
+// Owns one Linux socket. Used by both the client and server.
+class Socket {
 public:
-	Socket(int sock);
-	char* getRequest();
-	char* getRequestLine();
-	int getReqFile(char* buf, int n);
-	void sendResponse(char* res);
-	int getSock();
-	void closeSocket();
-	~Socket();
-private:
-	int sock;
-	int readn(int fd, void* buf, int n);
-};
+    explicit Socket(int descriptor);
+    Socket(const std::string& host, int port);
+    ~Socket();
+    Socket(const Socket&) = delete;
+    Socket& operator=(const Socket&) = delete;
 
+    std::string readLine();
+    std::string readBytes(std::size_t length);
+    std::string readToEnd();
+    void sendAll(const std::string& data);
+    void closeSocket();
+
+private:
+    int sock;
+};

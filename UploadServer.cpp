@@ -1,27 +1,26 @@
-#include "Socket.h"
 #include "ServerSocket.h"
-#include <stddef.h>
-#include <iostream>
-
 #include "UploadServerThread.hpp"
-
+#include <iostream>
+#include <string>
 using namespace std;
 
-int main() {
-	ServerSocket *ss;
-	try {
-		ss = new ServerSocket(8888);
-		cout << "Socket Created" << endl;
-	} catch (...) {
-		cout << "ERROR Creating Socket" << endl;
-		exit(EXIT_FAILURE);
-	}
-
-	while (true) {
-		if (ss != NULL) {
-			Socket *cs = ss->Accept();
-			UploadServerThread* uploadThread = new UploadServerThread(cs);
-			uploadThread->start();
-		}
-	}
+int main(int argc, char* argv[]) {
+    try {
+        int port = 8888;
+        if (argc == 2) port = stoi(argv[1]);
+        ServerSocket server(port);
+        cout << "UploadServer running on port " << port << endl;
+        while (true) {
+            UploadServerThread* worker = new UploadServerThread(server.Accept());
+            try {
+                worker->start();
+            } catch (...) {
+                delete worker;
+                throw;
+            }
+        }
+    } catch (const exception& error) {
+        cerr << error.what() << endl;
+        return 1;
+    }
 }

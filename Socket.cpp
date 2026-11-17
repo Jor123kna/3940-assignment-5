@@ -1,110 +1,88 @@
 #include "Socket.h"
-
-#include <iostream>
-// #include <sys/socket.h>
-#include <sys/types.h>
-// #include <resolv.h>
-#include <sstream>
+#include <cerrno>
+#include <cstring>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <stdexcept>
+#include <sys/socket.h>
 #include <unistd.h>
-#include <string.h>
-#include <stdio.h>
-
 using namespace std;
 
-Socket::Socket(int sock)
-{
-	this->sock = sock;
-  cout<<"created socket "<<sock<<endl;
+Socket::Socket(int descriptor) : sock(descriptor) {
+    if (sock < 0) throw runtime_error("Invalid socket.");
 }
 
-char* Socket::getRequest() {
-   int rval;
-   char *buf = new char[2048];
-
-   if ((rval = read(sock, buf, 2048)) < 0){
-     perror("reading socket");
-   }else  {
-     printf("%s\n",buf);
-   }
-
-  return buf;
-}
-
-char* Socket::getRequestLine() {
-  int rval;
-  char *buf = new char[1024];
-  char *pos = buf;
-  int count = 0;
-
-  char currChar;
-  char lastChar;
-  while ((rval = read(sock, pos, 1))) {
-    if (rval < 1) {
-      break;
+Socket::Socket(const string& host, int port) : sock(-1) {
+    if (port < 1 || port > 65535) throw runtime_error("Invalid port.");
+    hostent* address = gethostbyname(host.c_str());
+    if (address == NULL) throw runtime_error("Host not found.");
+    sockaddr_in server{};
+    server.sin_family = AF_INET;
+    server.sin_port = htons(port);
+    memcpy(&server.sin_addr, address->h_addr, address->h_length);
+    sock = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) throw runtime_error("Cannot create socket.");
+    if (connect(sock, (sockaddr*) &server, sizeof(server)) < 0) {
+        closeSocket();
+        throw runtime_error("Cannot connect to server.");
     }
-    currChar = *pos;
-    if (lastChar == '\r' && currChar == '\n') {
-      count++;
-      break;
+}
+
+string Socket::readLine() {
+    string line;
+    char character;
+    while (line.size() < 8192) {
+        int count = recv(sock, &character, 1, 0);
+        if (count < 0 && errno == EINTR) continue;
+        if (count <= 0) throw runtime_error("Connection ended early.");
+        if (character == '\n') return line;
+        if (character != '\r') line += character;
     }
-
-    lastChar = currChar;
-    count++;
-    pos++;
-  }
-
-  char *outBuf = new char[count + 1];
-  for (int i = 0; i < count; i++) {
-    outBuf[i] = buf[i];
-  }
-  outBuf[count] = '\0';
-
-  return outBuf;
+    throw runtime_error("HTTP line is too long.");
 }
 
-int Socket::getReqFile(char *buf, int n) {
-  cout << "in getReqFile" << endl;
-  return readn(sock, buf, n);
+string Socket::readBytes(size_t length) {
+    string data(length, '\0');
+    size_t received = 0;
+    while (received < length) {
+        int count = recv(sock, &data[received], length - received, 0);
+        if (count < 0 && errno == EINTR) continue;
+        if (count <= 0) throw runtime_error("Incomplete upload.");
+        received += count;
+    }
+    return data;
 }
 
-int Socket::readn(int fd, void* buf, int n) {
-  int nread;
-  char *p = (char *)buf;
-  char *q = (char *)buf + n;
-
-  while (p < q) {
-    if ((nread = read(fd, p, q - p)) < 0) {
-      if (errno == EINTR)
-        continue;
-      else
-        return -1;
-    } else if (nread == 0)
-      break;
-
-    p += nread;
-  }
-  return p - (char *) buf;
+string Socket::readToEnd() {
+    string data;
+    char buffer[4096];
+    int count;
+    while (true) {
+        count = recv(sock, buffer, sizeof(buffer), 0);
+        if (count < 0 && errno == EINTR) continue;
+        if (count < 0) throw runtime_error("Cannot read response.");
+        if (count == 0) return data;
+        data.append(buffer, count);
+    }
 }
 
-void Socket::sendResponse(char *res){
-  cout << "Sending response..." << endl;
-  int rval;
-  if ((rval = write(sock, res, strlen(res))) < 0){
-    perror("writing socket");
-  }else  {
-    printf("%s\n",res);
-  }
-}
-
-int Socket::getSock() {
-  return sock;
+void Socket::sendAll(const string& data) {
+    size_t sent = 0;
+    while (sent < data.size()) {
+        int count = send(sock, data.data() + sent, data.size() - sent, MSG_NOSIGNAL);
+        if (count < 0 && errno == EINTR) continue;
+        if (count <= 0) throw runtime_error("Cannot send data.");
+        sent += count;
+    }
 }
 
 void Socket::closeSocket() {
-  cout<<"closing socket "<<sock<<endl;
-  close(sock);
+    if (sock >= 0) {
+        close(sock);
+        sock = -1;
+    }
 }
 
-Socket::~Socket()
-{
+Socket::~Socket() {
+    closeSocket();
 }

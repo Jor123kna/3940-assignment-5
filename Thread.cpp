@@ -1,27 +1,25 @@
 #include "Thread.h"
+#include <cstring>
+#include <exception>
+#include <iostream>
 #include <pthread.h>
-#include <stdlib.h>
-#include <string.h>
+#include <stdexcept>
 
-#include "UploadServerThread.hpp"
+void* Thread::startMethod(void* argument) {
+    Thread* worker = static_cast<Thread*>(argument);
+    try { worker->run(); }
+    catch (const std::exception& error) { std::cerr << error.what() << '\n'; }
+    delete worker;
+    return nullptr;
+}
 
-void* startMethodInThread(void *arg)
-{
-	if (arg == NULL)
-		return 0;
-	UploadServerThread *thread = (UploadServerThread*)arg;
-	thread->run();
-	return NULL;
-}
-Thread::Thread(Thread *childThread) {
-	this->state = malloc(sizeof(pthread_t));
-	this->childThread = childThread;
-}
 void Thread::start() {
-        pthread_t tid;
-	pthread_create(&tid, NULL, startMethodInThread, (void *) this);
-	memcpy(this->state, (const void *)&tid, sizeof(pthread_t));
-}
-Thread::~Thread() {
-	free(this->state);
+    pthread_attr_t attributes;
+    int error = pthread_attr_init(&attributes);
+    if (error != 0) throw std::runtime_error(std::strerror(error));
+    error = pthread_attr_setdetachstate(&attributes, PTHREAD_CREATE_DETACHED);
+    pthread_t id;
+    if (error == 0) error = pthread_create(&id, &attributes, startMethod, this);
+    pthread_attr_destroy(&attributes);
+    if (error != 0) throw std::runtime_error(std::strerror(error));
 }

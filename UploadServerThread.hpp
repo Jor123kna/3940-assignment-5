@@ -8,8 +8,9 @@ class UploadServerThread : public Thread {
 
 public:
     UploadServerThread(Socket* socket);
+    ~UploadServerThread() override;
 
-    void run();
+    void run() override;
 
     std::stringstream& parseRequest(std::stringstream& is, HttpServletRequest& req);
 };

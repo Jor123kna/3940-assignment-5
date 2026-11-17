@@ -1,11 +1,14 @@
 #pragma once
+
 class Thread {
 public:
-	Thread(Thread *childThread);
-	~Thread();
-	void run() {}
-	void start();
+    virtual ~Thread() = default;
+    virtual void run() = 0;
+
+    // Start only heap-allocated workers. The detached thread deletes its worker
+    // after run() returns, so main can accept the next connection immediately.
+    void start();
+
 private:
-	void *state;
-	Thread *childThread;
+    static void* startMethod(void* argument);
 };
