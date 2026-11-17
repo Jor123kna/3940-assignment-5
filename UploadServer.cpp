@@ -20,8 +20,8 @@ int main() {
 	while (true) {
 		if (ss != NULL) {
 			Socket *cs = ss->Accept();
-			UploadServerThread uploadThread(cs);
-			uploadThread.start();
+			UploadServerThread* uploadThread = new UploadServerThread(cs);
+			uploadThread->start();
 		}
 	}
 }
